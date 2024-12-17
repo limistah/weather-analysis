@@ -210,7 +210,7 @@ class Analyzer ():
             "Min Average Temp": min_temp_avg,
             "Temp Range": round(max_temp_avg - min_temp_avg, 1),
             "Temp STD": temp_std_dev,
-            "Max Average RH ": max_rh_avg,
+            "Max Average RH": max_rh_avg,
             "Min Average RH": min_rh_avg,
             "RH STD": rh_std_dev,
             "RH Range": round(max_rh_avg - min_rh_avg, 1),
