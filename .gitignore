@@ -1,3 +1,6 @@
 __pycache__
 *_pkls
 **/*.bas
+data/
+results
+results.zip

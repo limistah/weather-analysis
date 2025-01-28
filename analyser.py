@@ -46,9 +46,29 @@ class Analyzer ():
         # loop through months in a year
         months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         for month in months:
-            end_row = 508 if month == "Feb" else 511
+            end_row = 509 if month == "Feb" else 512
             temp = self.complete_df[month + ' Temp'].iloc[0:end_row, 2:26]
             rh = self.complete_df[month + ' RH'].iloc[0:end_row, 2:26]
+            # temp = temp.dropna()
+            # rh = rh.dropna()
+            print(temp.shape, "temp", month)
+            print(rh.shape, "rh", month)
+            for column in temp.columns:
+                tmp_non_numeric_rows = temp[~temp[column].apply(lambda x: isinstance(x, (int, float)))]
+                print("tmp_non_numeric", tmp_non_numeric_rows.shape)
+                rh_non_numeric_rows = rh[~rh[column].apply(lambda x: isinstance(x, (int, float)))]
+                print("rh_non_numeric_rows", rh_non_numeric_rows.shape)
+
+                maxtemp = 40
+                mintemp = 20
+                maxrh = 95
+                minrh = 30
+
+                print(maxtemp, mintemp, maxrh, minrh)
+
+                rh.loc[rh[column] == '#####', column] = np.random.randint(minrh, maxrh, size=(rh[column] == '#####').sum())
+                temp.loc[temp[column] == '#####', column] = np.random.randint(mintemp, maxtemp, size=(temp[column] == '#####').sum())
+            
             self.year_data[month] = {
                 'temp': temp,
                 'rh': rh
@@ -59,11 +79,11 @@ class Analyzer ():
         for month in self.year_data:
             temp_df = self.year_data[month]['temp']
             rh_df = self.year_data[month]['rh']
-            coincident_rhs = self._calculate_concindent_rh(temp_df, rh_df)
+            coincident_rhs = self._calculate_concindent_rh(month, temp_df, rh_df)
             self.year_data[month]['coincident_rhs'] = coincident_rhs
         return self
     
-    def plot_coincindent_rh(self, pd: str):
+    def plot_coincindent_rh(self, city, month, pd: str):
         # Get the last row of the DataFrame
         last_row = pd.iloc[-1]
         
@@ -72,10 +92,11 @@ class Analyzer ():
         plt.scatter(last_row.index, last_row.values)
         plt.xlabel('Temp')
         plt.ylabel('Average RH Coincidences')
-        plt.title('Temp vs Average RH Coincidences')
+        plt.title(f'{city} {month} Temp vs Average RH Coincidences')
         plt.xticks(rotation=45)
         plt.tight_layout()
-        plt.show()
+        plt.savefig(f'results/{city}/{month}/temp_vs_avg_rh_coincidences.png')
+        plt.close()
 
     def _verified_data(self, the_data):
         try:
@@ -87,10 +108,11 @@ class Analyzer ():
             pass
         return False
     
-    def _calculate_concindent_rh(self, temp_df: pd.DataFrame, rh_df: pd.DataFrame):
+    def _calculate_concindent_rh(self, month: str, temp_df: pd.DataFrame, rh_df: pd.DataFrame):
         averages = []
         max_rows = 0
         coincident_df = pd.DataFrame()
+        # print(temp_df)
 
         num_rows = temp_df.shape[0]  # Get the number of rows in the DataFrame
 
@@ -99,12 +121,18 @@ class Analyzer ():
                 temp_value = temp_df.iloc[i, j]
                 if self._verified_data(temp_value):
                     rh_value = rh_df.iloc[i, j]
+                    if (rh_value == "#####"):
+                        print(month, "rh", rh_value, i, j)
+                    if (temp_value == "#####"):
+                        print(month, "temp", temp_value, i, j)
                     coincident_df = self._average_rh(coincident_df, temp_value, rh_value)
 
         for col in coincident_df.columns:
             column_data = coincident_df[col].dropna()
+            non_numeric_rows = coincident_df[~coincident_df[col].apply(lambda x: isinstance(x, (int, float)))]
+            # print(non_numeric_rows)  # Displays rows with non-numeric values
             if not column_data.empty:
-                avg = column_data.mean()
+                avg = column_data.mean(skipna=True)
                 averages.append(avg)
                 if len(column_data) > max_rows:
                     max_rows = len(column_data)
@@ -132,7 +160,6 @@ class Analyzer ():
             new_data = {temp_val: [rh_val]}
             new_df = pd.DataFrame(new_data)
             coincident_df = pd.concat([coincident_df, new_df], axis=1)
-
         return coincident_df
     
     # compute averages
@@ -260,7 +287,7 @@ class Analyzer ():
             print(f"An error occurred: {e}")
             return None
 
-    def plot_averages_stats(self, month: str, results):
+    def plot_averages_stats(self, city:str, month: str, results):
         df = pd.DataFrame.from_dict(results, orient='index', columns=['Value'])
         # Plot the table
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -271,10 +298,11 @@ class Analyzer ():
         table.set_fontsize(10)
         table.scale(1.2, 1.2)
         plt.subplots_adjust(left=0.4, right=0.5, top=0.9, bottom=0.1)
-        ax.set_title(f'{month} Averages and Statistics', fontsize=14, fontweight='bold')
-        plt.show()
+        # ax.set_title(f'{city} {month} Averages and Statistics', fontsize=14, fontweight='bold')
+        plt.savefig(f'results/{city}/{month}/averages_statistics.png')
+        plt.close()
 
-    def plot_averages(self, month:str, averages):
+    def plot_averages(self,city:str, month:str, averages):
         # Create a DataFrame from the averages dictionary
         df = pd.DataFrame(averages)
 
@@ -288,12 +316,13 @@ class Analyzer ():
         table.scale(1.2, 1.2)
 
         # Set the title
-        ax.set_title(f'{month} Hourly Averages for Temperature and Relative Humidity', fontsize=14, fontweight='bold')
+        # ax.set_title(f'{city} {month} Hourly Averages for Temperature and Relative Humidity', fontsize=14, fontweight='bold')
 
         # Adjust the subplot margins
         plt.subplots_adjust(left=0.2, right=0.8, top=0.8, bottom=0.1)
+        plt.savefig(f'results/{city}/{month}/hourly_averages.png')
+        plt.close()
 
-        plt.show()
 
     def freq_of_data_in_range(self, df, data_type):
         int_data_point_count = 0
@@ -311,7 +340,7 @@ class Analyzer ():
                         k = self._check_rh_range_of_data(val)
                     else:
                         raise ValueError("Invalid data type. Use 'temp' or 'rh'.")
-
+                    # print(k, val, row, col)
                     if pd.notna(probabilities.at[0, k]):
                         probabilities.at[0, k] += 1
                     else:
@@ -461,15 +490,15 @@ class Analyzer ():
     def compute_heating_degree_days(self, base_temp_model_hdd, tav_hdd, sigma_m_model_hdd, num_of_days_in_month_hdd):
         sng_heating_hb = (float(base_temp_model_hdd) - float(tav_hdd)) / (float(sigma_m_model_hdd) * math.sqrt(float(num_of_days_in_month_hdd)))
         avg_monthly_hdd = round((float(sigma_m_model_hdd) * math.pow(float(num_of_days_in_month_hdd), 3 / 2)) * (0.072196 + (sng_heating_hb / 2) + (1 / 9.6) * math.log(math.cosh(4.8 * sng_heating_hb))), 2)
-        return avg_monthly_hdd
+        return pd.DataFrame([{"HDD AVERAGE": avg_monthly_hdd}])
 
 
     def compute_cooling_degree_days(self, tav_cdd, base_temp_model_cdd, sigma_m_model_cdd, num_of_days_in_month_cdd):
         sng_cooling_hb = (float(tav_cdd) - float(base_temp_model_cdd)) / (float(sigma_m_model_cdd) * math.sqrt(float(num_of_days_in_month_cdd)))
         avg_monthly_cdd = round((float(sigma_m_model_cdd) * math.pow(float(num_of_days_in_month_cdd), 3 / 2)) * (0.072196 + (sng_cooling_hb / 2) + (1 / 9.6) * math.log(math.cosh(4.8 * sng_cooling_hb))), 2)
-        return avg_monthly_cdd
+        return pd.DataFrame([{"CDD AVERAGE": avg_monthly_cdd}])
     
-    def freq_of_rh_in_temp_range(self, temp_df, rh_df, the_end_row):
+    def freq_of_rh_in_temp_range(self, temp_df, rh_df, the_end_row, city, month):
         int_probability_count = 0
         the_table = pd.DataFrame(0, index=temp_df.columns, columns=range(1, 51))
         the_probability_table = pd.DataFrame(0, index=temp_df.columns, columns=range(1, 51))
@@ -480,12 +509,18 @@ class Analyzer ():
                     int_probability_count += 1
                     k = self._check_temp_range_of_data(temp_val)
                     rh_val = rh_df.iloc[i, j]
+                    rh_val = rh_val if not pd.isna(rh_val) else np.random.randint(20, 99)
+                    # print(i, j, rh_val, city, month)
                     l = self._check_rh_range_of_data(rh_val)
                     if pd.notna(the_table.iloc[l, k]):
                         the_table.iloc[l, k] += 1
                     else:
                         the_table.iloc[l, k] = 1
-
+                    # if pd.notna(the_table.iloc[l, k]):
+                    #     the_table.iloc[l, k] += 1
+                    # else:
+                    #     the_table.iloc[l, k] = 1
+        the_probability_table = the_probability_table.astype(float)
         for i in range(1, the_table.shape[0]):
             for j in range(1, the_table.shape[1]):
                 if pd.notna(the_table.iloc[i, j]) and the_table.iloc[i, j] != 0:
@@ -501,28 +536,28 @@ class Analyzer ():
         val_str = str(val)
         int_decimal_position = val_str.find(".")
 
-        # Return six places after decimal point
-        str_check = val_str[:int_decimal_position + 7]
+        # Return four places after decimal point
+        str_check = val_str[:int_decimal_position + 5]
 
         int_last_digit = int(str_check[-1])
-        str_check = val_str[:int_decimal_position + 6]
+        str_check = val_str[:int_decimal_position + 4]
 
         if int_last_digit > 4:
-            str_output = str(float(str_check) + 0.000001)
-            return str_output
+            str_output = float(str_check) + 0.0001
+            return round(str_output, 4)
         else:
-            return val_str[:int_decimal_position + 6]
+            return round(float(val_str[:int_decimal_position + 4]), 4)
 
-    def plot_generic_table(self, title: str, data: pd.DataFrame):
+
+    def plot_generic_table(self, data: pd.DataFrame, title: str, city:str, month:str):
         df = pd.DataFrame.from_dict(data)
         # Plot the table
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 6))
         ax.axis('tight')
         ax.axis('off')
+
         table = ax.table(cellText=df.values, colLabels=df.columns, rowLabels=df.index, cellLoc='center', loc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1.2, 1.2)
-        plt.subplots_adjust(left=0.4, right=0.5, top=0.9, bottom=0.1)
-        ax.set_title(f'{title}', fontsize=14, fontweight='bold')
-        plt.show()
+        # plt.subplots_adjust(left=0.4, right=0.5, top=0.9, bottom=0.1)
+        p = f'results/{city}/{month}/{title}.png' if month != "" else f'results/{city}/{title}.png'
+        plt.savefig(p)
+        plt.close()
